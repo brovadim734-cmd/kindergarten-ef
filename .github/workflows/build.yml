@@ -1,0 +1,62 @@
+# Наименование конвейера, отображаемое в интерфейсе GitHub Actions
+name: Build
+
+# События, при наступлении которых конвейер запускается
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:      # позволяет запускать конвейер вручную
+
+jobs:
+  build:
+    # Наименование задания формируется с указанием операционной системы
+    name: Сборка под управлением ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Отказ одного задания не прекращает выполнение остальных
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      # Шаг 1. Получение исходного кода из репозитория
+      - name: Получение исходного кода
+        uses: actions/checkout@v4
+
+      # Шаг 2. Установка пакета средств разработки .NET
+      - name: Установка .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      # Шаг 3. Кэширование пакетов NuGet для сокращения времени сборки
+      - name: Кэширование пакетов NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # Шаг 4. Восстановление зависимостей
+      - name: Восстановление зависимостей
+        run: dotnet restore KindergartenEf.csproj
+
+      # Шаг 5. Сборка проекта в конфигурации Release
+      - name: Сборка проекта
+        run: dotnet build KindergartenEf.csproj --configuration Release --no-restore
+
+      # Шаг 6. Публикация приложения
+      - name: Публикация приложения
+        run: dotnet publish KindergartenEf.csproj --configuration Release --no-build --output ./publish
+
+      # Шаг 7. Сохранение результата публикации в качестве артефакта
+      - name: Сохранение артефакта сборки
+        uses: actions/upload-artifact@v4
+        with:
+          name: KindergartenEf-${{ matrix.os }}
+          path: ./publish/**
+          retention-days: 30
